@@ -5,9 +5,9 @@ const WHATSAPP_BASE_URL = "https://wa.me";
 
 export const formatCurrency = (value: number) =>
   new Intl.NumberFormat("es-AR", {
-    style: "currency",
-    currency: "ARS",
+    useGrouping: false,
     minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(value);
 
 export const getFragranceFinalPrice = (fragrance: Fragrance) => {

@@ -317,6 +317,8 @@ const ProductEditor = ({
             Precio
             <TextInput
               value={state.values.price}
+              placeholder="Ej: 124000,54"
+              inputMode="decimal"
               onChange={(event) => onChange("price", event.target.value)}
             />
           </Field>
@@ -331,6 +333,8 @@ const ProductEditor = ({
             Precio promocional
             <TextInput
               value={state.values.promotionalPrice}
+              placeholder="Ej: 99999,99"
+              inputMode="decimal"
               onChange={(event) =>
                 onChange("promotionalPrice", event.target.value)
               }
