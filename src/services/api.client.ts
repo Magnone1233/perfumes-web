@@ -4,6 +4,7 @@ interface RequestOptions {
   method?: "GET" | "POST" | "PATCH" | "DELETE";
   body?: unknown;
   signal?: AbortSignal;
+  headers?: Record<string, string>;
 }
 
 class ApiClient {
@@ -16,19 +17,27 @@ class ApiClient {
   }
 
   async request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
-    const { method = "GET", body, signal } = options;
+    const { method = "GET", body, signal, headers = {} } = options;
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
     const combinedSignal = signal ?? controller.signal;
 
+    const isFormData = body instanceof FormData;
+    const requestHeaders = new Headers(headers);
+    if (!isFormData) {
+      requestHeaders.set("Content-Type", "application/json");
+    }
+
     try {
       const response = await fetch(`${this.baseUrl}${endpoint}`, {
         method,
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: body ? JSON.stringify(body) : undefined,
+        headers: requestHeaders,
+        body: body
+          ? isFormData
+            ? (body as FormData)
+            : JSON.stringify(body)
+          : undefined,
         signal: combinedSignal,
       });
 
@@ -47,7 +56,16 @@ class ApiClient {
         throw new Error(message);
       }
 
-      return (await response.json()) as T;
+      if (response.status === 204) {
+        return undefined as T;
+      }
+
+      const contentType = response.headers.get("content-type") ?? "";
+      if (contentType.includes("application/json")) {
+        return (await response.json()) as T;
+      }
+
+      return (await response.text()) as T;
     } catch (error) {
       clearTimeout(timeoutId);
 
@@ -69,6 +87,18 @@ class ApiClient {
 
   get<T>(endpoint: string, signal?: AbortSignal) {
     return this.request<T>(endpoint, { method: "GET", signal });
+  }
+
+  post<T>(endpoint: string, body?: unknown, headers?: Record<string, string>) {
+    return this.request<T>(endpoint, { method: "POST", body, headers });
+  }
+
+  patch<T>(endpoint: string, body?: unknown, headers?: Record<string, string>) {
+    return this.request<T>(endpoint, { method: "PATCH", body, headers });
+  }
+
+  delete<T>(endpoint: string, headers?: Record<string, string>) {
+    return this.request<T>(endpoint, { method: "DELETE", headers });
   }
 }
 
