@@ -1,10 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import styled from "styled-components";
+import { AdminPanel } from "./components/AdminPanel/AdminPanel";
 import { CartSummary } from "./components/CartSummary/CartSummary";
 import { PageLayout, PageSection } from "./components/Layout/Layout";
 import { ProductGrid } from "./components/ProductGrid/ProductGrid";
 import { StateBox } from "./components/StateBox/StateBox";
 import { Typography } from "./components/Typography/Typography";
+import {
+  clearAdminToken,
+  getAdminToken,
+  saveAdminToken,
+} from "./services/admin-auth.service";
 import type { CartItem } from "./types/cart";
 import type { Fragrance } from "./types/fragrance";
 import { getFragrances } from "./services/fragrances.service";
@@ -30,19 +36,57 @@ const CatalogMain = styled.div`
   gap: 20px;
 `;
 
+const AdminTopLink = styled.a`
+  color: ${({ theme }) => theme.colors.accentSoft};
+  font-size: 0.9rem;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+`;
+
 function App() {
+  const isAdminRoute = window.location.pathname.startsWith("/admin");
   const [fragrances, setFragrances] = useState<Fragrance[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [adminToken, setAdminToken] = useState<string | null>(() =>
+    getAdminToken(),
+  );
+
+  const loadFragrances = useCallback(async (signal?: AbortSignal) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const data = await getFragrances(signal);
+
+      if (signal?.aborted) {
+        return;
+      }
+
+      setFragrances(data);
+    } catch (err) {
+      if (signal?.aborted) {
+        return;
+      }
+
+      const message =
+        err instanceof Error ? err.message : "No se pudo cargar el catalogo.";
+      setError(message);
+    } finally {
+      if (!signal?.aborted) {
+        setIsLoading(false);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
 
-    const loadFragrances = async () => {
+    const loadInitialFragrances = async () => {
       try {
-        setIsLoading(true);
-        setError(null);
         const data = await getFragrances(controller.signal);
 
         if (controller.signal.aborted) {
@@ -65,7 +109,7 @@ function App() {
       }
     };
 
-    void loadFragrances();
+    void loadInitialFragrances();
 
     return () => {
       controller.abort();
@@ -164,6 +208,37 @@ function App() {
 
     window.open(url, "_blank", "noopener,noreferrer");
   };
+
+  const handleAdminLoginSuccess = (token: string) => {
+    setAdminToken(token);
+    saveAdminToken(token);
+  };
+
+  const handleAdminLogout = () => {
+    setAdminToken(null);
+    clearAdminToken();
+  };
+
+  if (isAdminRoute) {
+    return (
+      <PageLayout maxWidth={980} horizontalPadding={30} mobilePadding={18}>
+        <PageSection gap={10}>
+          <AdminTopLink href="/">Volver al catalogo</AdminTopLink>
+        </PageSection>
+
+        <PageSection>
+          <AdminPanel
+            fragrances={fragrances}
+            productsLoading={isLoading}
+            adminToken={adminToken}
+            onLoginSuccess={handleAdminLoginSuccess}
+            onLogout={handleAdminLogout}
+            onRefresh={() => loadFragrances()}
+          />
+        </PageSection>
+      </PageLayout>
+    );
+  }
 
   return (
     <PageLayout maxWidth={1240} horizontalPadding={36} mobilePadding={20}>
